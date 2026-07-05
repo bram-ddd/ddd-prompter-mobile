@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DDD Prompter">
+<title>DDD Prompter</title>
+<style>
+  :root {
+    --amber: #f5a624;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #000; font-family: -apple-system, system-ui, sans-serif; }
+
+  /* camerabeeld fullscreen, gespiegeld als selfie-preview */
+  #cam {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; transform: scaleX(-1); background: #111;
+  }
+
+  /* prompter-overlay bovenin, vlak onder de frontlens */
+  #prompt {
+    position: fixed; top: 0; left: 0; right: 0; height: 42%;
+    padding-top: calc(var(--safe-top) + 8px);
+    background: linear-gradient(to bottom, rgba(0,0,0,.82) 0%, rgba(0,0,0,.72) 75%, rgba(0,0,0,0) 100%);
+    overflow: hidden;
+  }
+  #clip { position: absolute; inset: 0; padding-top: calc(var(--safe-top) + 8px); overflow: hidden; }
+  #scroller {
+    padding: 0 18px 40vh; text-align: center; color: #fff;
+    font-weight: 600; will-change: transform;
+    text-shadow: 0 1px 3px rgba(0,0,0,.8);
+  }
+  #scroller p { margin-bottom: .55em; }
+  #scroller p.regie {
+    font-family: ui-monospace, monospace; font-weight: 700;
+    color: var(--amber); font-size: .62em;
+  }
+  /* leeslijn */
+  #readline {
+    position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 8px + 1.1em);
+    pointer-events: none;
+  }
+  #readline::before, #readline::after {
+    content: ""; position: absolute; width: 14px; height: 3px;
+    background: rgba(255,59,48,.85); border-radius: 2px; top: 0;
+  }
+  #readline::before { left: 4px; }
+  #readline::after { right: 4px; }
+
+  /* opname-indicator */
+  #recBadge {
+    position: fixed; top: calc(var(--safe-top) + 10px); right: 12px;
+    display: none; align-items: center; gap: 6px;
+    background: rgba(0,0,0,.55); border-radius: 14px; padding: 4px 10px;
+    color: #fff; font-size: 13px; font-variant-numeric: tabular-nums; z-index: 5;
+  }
+  #recBadge.on { display: flex; }
+  #recBadge i {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #ff3b30; animation: blink 1.2s infinite;
+  }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* bedieningsbalk onderin */
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding: 10px 12px calc(var(--safe-bottom) + 10px);
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
+  }
+  #bar button {
+    border: 0; border-radius: 12px; background: rgba(30,30,30,.72);
+    color: #fff; font-size: 17px; min-width: 46px; height: 46px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #bar button:active { background: rgba(70,70,70,.85); }
+  #speedVal {
+    color: rgba(255,255,255,.75); font-size: 13px; min-width: 26px;
+    text-align: center; font-variant-numeric: tabular-nums;
+  }
+  #recBtn {
+    width: 62px; height: 62px; min-width: 62px; border-radius: 50%;
+    background: rgba(255,255,255,.25); position: relative;
+  }
+  #recBtn::after {
+    content: ""; position: absolute; inset: 8px; border-radius: 50%;
+    background: #ff3b30; transition: all .18s ease;
+  }
+  #recBtn.rec::after { inset: 18px; border-radius: 6px; }
+
+  /* script-invoer */
+  #scriptDlg {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    max-width: none; max-height: none;
+    border: 0; background: rgba(0,0,0,.94); color: #fff;
+    padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
+    display: none; flex-direction: column; gap: 12px; z-index: 10;
+  }
+  #scriptDlg.open { display: flex; }
+  #scriptDlg h2 { font-size: 17px; font-weight: 600; }
+  #scriptDlg textarea {
+    flex: 1; width: 100%; resize: none; border-radius: 12px; border: 0;
+    background: #1a1a1a; color: #fff; padding: 12px; font-size: 15px; line-height: 1.5;
+  }
+  #scriptDlg .row { display: flex; gap: 10px; }
+  #scriptDlg .row button {
+    flex: 1; height: 48px; border: 0; border-radius: 12px; font-size: 16px; font-weight: 600;
+  }
+  #dlgSave { background: var(--amber); color: #000; }
+  #dlgPaste, #dlgCancel { background: #2a2a2a; color: #fff; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 92px);
+    transform: translateX(-50%); background: rgba(20,20,20,.92); color: #fff;
+    padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20;
+    max-width: 86vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<video id="cam" autoplay playsinline muted></video>
+
+<div id="prompt">
+  <div id="clip"><div id="scroller"></div></div>
+  <div id="readline"></div>
+</div>
+
+<div id="recBadge"><i></i><span id="recTime">0:00</span></div>
+
+<div id="bar">
+  <button id="scriptBtn" title="Script">✎</button>
+  <button id="resetBtn" title="Terug naar begin">⟲</button>
+  <button id="slowBtn" title="Langzamer">−</button>
+  <span id="speedVal">30</span>
+  <button id="fastBtn" title="Sneller">+</button>
+  <button id="smallBtn" title="Tekst kleiner" style="font-size:13px">A</button>
+  <button id="bigBtn" title="Tekst groter" style="font-size:21px">A</button>
+  <button id="recBtn" title="Opnemen"></button>
+</div>
+
+<div id="scriptDlg">
+  <h2>Script</h2>
+  <textarea id="scriptText" placeholder="Plak hier je videoscript.
+
+Regie-regels (niet uitspreken) worden amber:
+regels met » of «, of beginnend met #, BLOK, START, EINDE."></textarea>
+  <div class="row">
+    <button id="dlgPaste">Plakken</button>
+    <button id="dlgCancel">Annuleer</button>
+    <button id="dlgSave">Gebruik</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const scroller = $('scroller'), clip = $('clip');
+
+  // ---- status ----
+  let offset = 0, scrolling = false, lastTick = 0;
+  let speed = +(localStorage.speed || 30);       // punten per seconde
+  let fontSize = +(localStorage.fontSize || 24); // px
+  let stream = null, recorder = null, chunks = [], recStart = 0, recTimer = null;
+
+  const DEFAULT_SCRIPT = `DDD Prompter staat klaar.
+
+Tik op ✎ om je script te plakken.
+
+Tik op de tekst om te starten of te pauzeren.
+
+# regie-regels zien er zo uit
+
+De rode opnameknop neemt video en geluid op en bewaart naar je filmrol.`;
+
+  function toast(msg, ms = 2600) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  // ---- script renderen (zelfde regie-herkenning als de Mac-versie) ----
+  function isRegie(line) {
+    return line.includes('»') || line.includes('«')
+      || line.startsWith('#') || line.startsWith('BLOK')
+      || line.startsWith('START') || line.startsWith('EINDE');
+  }
+
+  function render() {
+    const text = localStorage.script || DEFAULT_SCRIPT;
+    scroller.style.fontSize = fontSize + 'px';
+    scroller.style.lineHeight = 1.4;
+    scroller.innerHTML = '';
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      const p = document.createElement('p');
+      p.textContent = line;
+      if (isRegie(line)) p.className = 'regie';
+      scroller.appendChild(p);
+    }
+    applyOffset();
+  }
+
+  function applyOffset() { scroller.style.transform = `translateY(${-offset}px)`; }
+
+  function tick(now) {
+    if (scrolling) {
+      const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 1 / 60;
+      offset += speed * dt;
+      const max = Math.max(scroller.scrollHeight - clip.clientHeight * 0.3, 0);
+      if (offset >= max) { offset = max; scrolling = false; }
+      applyOffset();
+    }
+    lastTick = now;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---- bediening ----
+  $('prompt').addEventListener('click', () => { scrolling = !scrolling; });
+  $('resetBtn').onclick = () => { offset = 0; scrolling = false; applyOffset(); };
+  $('fastBtn').onclick  = () => { speed = Math.min(speed + 5, 200); sync(); };
+  $('slowBtn').onclick  = () => { speed = Math.max(speed - 5, 5); sync(); };
+  $('bigBtn').onclick   = () => { fontSize = Math.min(fontSize + 2, 60); sync(); render(); };
+  $('smallBtn').onclick = () => { fontSize = Math.max(fontSize - 2, 12); sync(); render(); };
+
+  function sync() {
+    $('speedVal').textContent = speed;
+    localStorage.speed = speed;
+    localStorage.fontSize = fontSize;
+  }
+
+  // ---- script-dialoog ----
+  const dlg = $('scriptDlg');
+  $('scriptBtn').onclick = () => {
+    $('scriptText').value = localStorage.script || '';
+    dlg.classList.add('open');
+  };
+  $('dlgCancel').onclick = () => dlg.classList.remove('open');
+  $('dlgSave').onclick = () => {
+    localStorage.script = $('scriptText').value;
+    offset = 0; scrolling = false;
+    dlg.classList.remove('open');
+    render();
+  };
+  $('dlgPaste').onclick = async () => {
+    try { $('scriptText').value = await navigator.clipboard.readText(); }
+    catch { toast('Klembord niet beschikbaar. Druk lang in het tekstvak en kies Plak.'); }
+  };
+
+  // ---- camera ----
+  async function initCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: true,
+      });
+      $('cam').srcObject = stream;
+    } catch (e) {
+      toast('Geen camera-toegang: ' + e.message, 6000);
+    }
+  }
+
+  // ---- opname ----
+  function pickMime() {
+    for (const m of ['video/mp4', 'video/webm;codecs=vp9', 'video/webm']) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return '';
+  }
+
+  $('recBtn').onclick = () => {
+    if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+    if (!stream) { toast('Camera nog niet actief.'); return; }
+    chunks = [];
+    try {
+      recorder = new MediaRecorder(stream, pickMime() ? { mimeType: pickMime() } : undefined);
+    } catch (e) { toast('Opnemen niet ondersteund: ' + e.message, 6000); return; }
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = saveRecording;
+    recorder.start(1000);
+    recStart = Date.now();
+    $('recBtn').classList.add('rec');
+    $('recBadge').classList.add('on');
+    recTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - recStart) / 1000);
+      $('recTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 500);
+  };
+
+  async function saveRecording() {
+    clearInterval(recTimer);
+    $('recBtn').classList.remove('rec');
+    $('recBadge').classList.remove('on');
+    const type = recorder.mimeType || 'video/mp4';
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    const file = new File([blob], `ddd-ugc-${Date.now()}.${ext}`, { type });
+
+    // via het deelmenu naar de filmrol ("Bewaar video")
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    // terugval: download naar Bestanden
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+    toast('Video opgeslagen in Bestanden (delen werd geblokkeerd).', 5000);
+  }
+
+  // ---- scherm wakker houden tijdens gebruik ----
+  let wakeLock = null;
+  async function keepAwake() {
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
+
+  // ---- start ----
+  sync();
+  render();
+  initCamera();
+  keepAwake();
+})();
+</script>
+</body>
+</html>
