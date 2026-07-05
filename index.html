@@ -66,25 +66,31 @@
   }
   @keyframes blink { 50% { opacity: .25; } }
 
-  /* bedieningsbalk onderin */
+  /* bediening onderin: rij met regelknoppen + opnameknop eronder in het midden.
+     Alles vloeiend (flex, geen vaste breedtes) zodat het op elke schermbreedte past. */
   #bar {
     position: fixed; left: 0; right: 0; bottom: 0;
-    padding: 10px 12px calc(var(--safe-bottom) + 10px);
-    display: flex; align-items: center; justify-content: space-between; gap: 6px;
-    background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
+    padding: 8px 10px calc(var(--safe-bottom) + 8px);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,0));
   }
-  #bar button {
+  #controls {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; max-width: 520px;
+  }
+  #controls button {
+    flex: 1 1 0; min-width: 0; height: 44px;
     border: 0; border-radius: 12px; background: rgba(30,30,30,.72);
-    color: #fff; font-size: 17px; min-width: 46px; height: 46px;
+    color: #fff; font-size: 17px;
     display: flex; align-items: center; justify-content: center;
   }
-  #bar button:active { background: rgba(70,70,70,.85); }
+  #controls button:active { background: rgba(70,70,70,.85); }
   #speedVal {
-    color: rgba(255,255,255,.75); font-size: 13px; min-width: 26px;
+    flex: 0 0 30px; color: rgba(255,255,255,.75); font-size: 13px;
     text-align: center; font-variant-numeric: tabular-nums;
   }
   #recBtn {
-    width: 62px; height: 62px; min-width: 62px; border-radius: 50%;
+    width: 62px; height: 62px; border: 0; border-radius: 50%;
     background: rgba(255,255,255,.25); position: relative;
   }
   #recBtn::after {
@@ -92,6 +98,12 @@
     background: #ff3b30; transition: all .18s ease;
   }
   #recBtn.rec::after { inset: 18px; border-radius: 6px; }
+  /* liggend: prompter smaller in het midden, bediening compacter */
+  @media (orientation: landscape) {
+    #prompt { height: 55%; left: 15%; right: 15%; }
+    #bar { gap: 6px; }
+    #recBtn { width: 54px; height: 54px; }
+  }
 
   /* script-invoer */
   #scriptDlg {
@@ -136,13 +148,15 @@
 <div id="recBadge"><i></i><span id="recTime">0:00</span></div>
 
 <div id="bar">
-  <button id="scriptBtn" title="Script">✎</button>
-  <button id="resetBtn" title="Terug naar begin">⟲</button>
-  <button id="slowBtn" title="Langzamer">−</button>
-  <span id="speedVal">30</span>
-  <button id="fastBtn" title="Sneller">+</button>
-  <button id="smallBtn" title="Tekst kleiner" style="font-size:13px">A</button>
-  <button id="bigBtn" title="Tekst groter" style="font-size:21px">A</button>
+  <div id="controls">
+    <button id="scriptBtn" title="Script">✎</button>
+    <button id="resetBtn" title="Terug naar begin">⟲</button>
+    <button id="slowBtn" title="Langzamer">−</button>
+    <span id="speedVal">30</span>
+    <button id="fastBtn" title="Sneller">+</button>
+    <button id="smallBtn" title="Tekst kleiner" style="font-size:13px">A</button>
+    <button id="bigBtn" title="Tekst groter" style="font-size:21px">A</button>
+  </div>
   <button id="recBtn" title="Opnemen"></button>
 </div>
 
